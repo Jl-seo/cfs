@@ -1,221 +1,562 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Executive Insights — HR Dashboard</title>
-  <!-- Spoqa Han Sans & FontAwesome -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/spoqa-han-sans/css/SpoqaHanSans.css">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <style>
-    :root {
-      --primary: #FA5C00;
-      --teal:    #00A28A;
-      --red:     #D9534F;
-      --bg:      #F8F9FA;
-      --card:    #FFFFFF;
-      --border:  #E0E0E0;
-    }
-    * { box-sizing: border-box; margin:0; padding:0; font-family: 'Spoqa Han Sans', sans-serif; }
-    body { background: var(--bg); color: #333; }
-    header { background: var(--primary); color: #fff; padding:16px; display:flex; align-items:center; gap:8px; font-size:20px; }
-    nav { background: #fff; border-bottom:1px solid var(--border); padding:8px; display:flex; gap:16px; overflow-x:auto; }
-    nav a { color:#555; text-decoration:none; font-weight:500; white-space:nowrap; }
-    nav a:hover { color: var(--primary); }
-    .filters { background:#fff; border-bottom:1px solid var(--border); padding:12px; display:flex; flex-wrap:wrap; gap:12px; }
-    .filters select { padding:6px 8px; border:1px solid var(--border); border-radius:4px; background:#fff; }
-    main { padding:24px; max-width:1400px; margin:0 auto; }
-    section { margin-bottom:48px; }
-    h2 { margin-bottom:16px; font-size:18px; font-weight:600; display:flex; align-items:center; gap:8px; }
-    .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(350px,1fr)); gap:24px; }
-    .cards.kpi-group { margin-bottom:16px; }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:24px; display:flex; flex-direction:column; }
-    .card h3 { margin:0 0 8px; font-size:16px; font-weight:600; display:flex; align-items:center; gap:6px; }
-    .kpi { margin-top:auto; font-size:32px; font-weight:700; }
-    .delta { margin-left:8px; font-size:14px; }
-    canvas { width:100% !important; height:300px !important; }
-  </style>
-</head>
-<body>
-  <header><i class="fa-solid fa-chart-column"></i> Executive Insights</header>
-  <nav>
-    <a href="#secRecruit">Recruitment</a>
-    <a href="#secOnboard">Onboarding</a>
-    <a href="#secDEI">DEI</a>
-    <a href="#secLeave">Leave</a>
-    <a href="#secAttr">Attrition</a>
-    <a href="#secTrends">Historical Trends</a>
-    <a href="#secTerm">Termination</a>
-  </nav>
-  <div class="filters">
-    <select><option>2024</option></select>
-    <select><option>May</option></select>
-    <select><option>BU: All</option></select>
-    <select><option>Dept: All</option></select>
-    <select><option>Level: All</option></select>
-    <select><option>Gender: All</option></select>
+import React, { useState } from "react";
+import {
+  Home,
+  Activity,
+  Users,
+  Briefcase,
+  Calendar,
+  CheckCircle,
+  Bell,
+  ClipboardList,
+} from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+
+// Recharts core imports
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  FunnelChart,
+  Funnel,
+  Legend,
+  Cell,
+  LabelList,
+} from "recharts";
+
+/**********************************************************************
+ * 1) 🔧  Generic helpers & layout components                         *
+ **********************************************************************/
+const SectionTitle = ({ children }) => (
+  <h2 className="text-lg font-semibold mb-4">{children}</h2>
+);
+
+const CardWrapper = ({ children, className = "" }) => (
+  <Card className={`p-4 ${className}`}>
+    <CardContent>{children}</CardContent>
+  </Card>
+);
+
+const Donut = ({ data, colors }) => (
+  <ResponsiveContainer width="100%" height={200}>
+    <PieChart margin={{ right: 60 }}>
+      <Pie data={data} dataKey="value" innerRadius={60} outerRadius={90}>
+        {data.map((_, i) => (
+          <Cell key={i} fill={colors[i % colors.length]} />
+        ))}
+        <LabelList dataKey="value" position="inside" fill="#fff" />
+      </Pie>
+      <Legend layout="vertical" align="right" verticalAlign="middle" />
+    </PieChart>
+  </ResponsiveContainer>
+);
+
+/**********************************************************************
+ * 2) 📊  Mock data                                                   *
+ **********************************************************************/
+// -- Dashboard -------------------------------------------------------
+const kpis = [
+  { label: "Total Employees", value: 23541, delta: 5, icon: Users },
+  { label: "Total Projects", value: 12389, delta: -8, icon: Briefcase },
+  { label: "Job Applicants", value: 17389, delta: 4, icon: ClipboardList },
+  { label: "Job Views", value: 9993, delta: -3, icon: Activity },
+];
+const workingFormat = [
+  { name: "Remote", value: 220 },
+  { name: "Hybrid", value: 180 },
+  { name: "On‑site", value: 120 },
+];
+const avgKPI = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"].map((m) => ({
+  month: m,
+  kpi: 60 + Math.random() * 10,
+}));
+const schedule = [
+  { title: "Interview – UX Designer", time: "09:00–10:00" },
+  { title: "Retro Day – HR Dept", time: "14:00–17:00" },
+];
+
+// -- Recruitment -----------------------------------------------------
+const SOURCE_COLORS = ["#a78bfa", "#6366f1", "#c4b5fd", "#8b5cf6"];
+const funnelData = [
+  { stage: "Applications", value: 929 },
+  { stage: "Screening", value: 820 },
+  { stage: "Interviews", value: 680 },
+  { stage: "Offers", value: 449 },
+  { stage: "Hires", value: 353 },
+];
+const hiringTrend = ["Jan", "Feb", "Mar", "Apr", "May"].map((m, i) => ({
+  month: m,
+  hires: 220 + 20 * i,
+}));
+const sourceSplit = [
+  { name: "Job Boards", value: 40 },
+  { name: "Referral", value: 30 },
+  { name: "Agency", value: 20 },
+  { name: "Direct", value: 10 },
+];
+
+// -- Workforce -------------------------------------------------------
+const GENDER_COLORS = ["#c4b5fd", "#6366f1"];
+const GENERATION_COLORS = ["#fde047", "#fbbf24", "#f59e0b", "#b45309"];
+const genderStructure = [
+  { name: "Female", value: 45 },
+  { name: "Male", value: 55 },
+];
+const generationData = [
+  { name: "Gen Z", value: 15 },
+  { name: "Gen Y", value: 45 },
+  { name: "Gen X", value: 30 },
+  { name: "Boomer", value: 10 },
+];
+const ageDistribution = [
+  { range: "20‑24", count: 400 },
+  { range: "25‑29", count: 820 },
+  { range: "30‑34", count: 730 },
+  { range: "35‑39", count: 540 },
+];
+
+// -- Productivity ----------------------------------------------------
+const prodKPI = [
+  { label: "Pick UPH", val: 118, unit: "" },
+  { label: "Pack UPH", val: 111, unit: "" },
+  { label: "Err Rate", val: 4.2, unit: "%" },
+  { label: "Cap Util", val: 82, unit: "%" },
+];
+const uphData = [
+  { hour: "08", pick: 120, pack: 110 },
+  { hour: "09", pick: 135, pack: 118 },
+  { hour: "10", pick: 142, pack: 124 },
+  { hour: "11", pick: 138, pack: 121 },
+];
+const errTrend = uphData.map((d) => ({
+  hour: d.hour,
+  err: 3.8 + Math.random() * 0.6,
+}));
+const revStaff = [
+  { q: "Q1", jr: 320, mid: 450, sr: 520 },
+  { q: "Q2", jr: 330, mid: 460, sr: 540 },
+  { q: "Q3", jr: 340, mid: 470, sr: 560 },
+];
+
+// -- Attendance ------------------------------------------------------
+const otTrend = [
+  { month: "Jan", ot: 8.2 },
+  { month: "Feb", ot: 8.7 },
+  { month: "Mar", ot: 9.1 },
+];
+const absenceTrend = [
+  { month: "Jan", pct: 8.5 },
+  { month: "Feb", pct: 9.2 },
+  { month: "Mar", pct: 10.1 },
+];
+
+// -- Diversity -------------------------------------------------------
+const promoRate = [
+  { gen: "Gen Z", male: 12, female: 14 },
+  { gen: "Gen Y", male: 8, female: 10 },
+];
+const payGap = [
+  { level: "Jr", male: 42, female: 40 },
+  { level: "Mid", male: 62, female: 59 },
+  { level: "Sr", male: 88, female: 84 },
+];
+const leadership = [
+  { name: "Female", value: 35 },
+  { name: "Male", value: 65 },
+];
+
+/**********************************************************************
+ * 3) 🧩  Dashboard widgets                                           *
+ **********************************************************************/
+const KPIGrid = () => (
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    {kpis.map(({ label, value, delta, icon: Icon }) => (
+      <CardWrapper key={label} className="border">
+        <div className="flex items-center justify-between text-xs text-slate-500">
+          {label}
+          <Icon size={14} />
+        </div>
+        <div className="text-2xl font-bold text-indigo-700">
+          {value.toLocaleString()}
+        </div>
+        <div className={`text-xs ${delta > 0 ? "text-emerald-600" : "text-rose-600"}`}>{
+          delta > 0 ? "+" : ""
+        }{delta}%</div>
+      </CardWrapper>
+    ))}
   </div>
-  <main>
-    <!-- Recruitment -->
-    <section id="secRecruit">
-      <h2><i class="fa-solid fa-user-plus"></i> Recruitment</h2>
-      <div class="cards kpi-group">
-        <div class="card"><h3><i class="fa-solid fa-users"></i> Applicants <span class="delta">▲5%</span></h3><div class="kpi">1,250</div></div>
-        <div class="card"><h3><i class="fa-solid fa-comments"></i> Interviews <span class="delta" style="color:var(--red)">▼3%</span></h3><div class="kpi">350</div></div>
-        <div class="card"><h3><i class="fa-solid fa-user-check"></i> Hires <span class="delta">▲6%</span></h3><div class="kpi">95</div></div>
+);
+
+const WorkingFormat = () => (
+  <CardWrapper>
+    <SectionTitle>Working Format</SectionTitle>
+    <Donut data={workingFormat} colors={["#22c55e", "#3b82f6", "#a855f7"]} />
+  </CardWrapper>
+);
+
+const AvgKPICard = () => (
+  <CardWrapper>
+    <SectionTitle>Average team KPI</SectionTitle>
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={avgKPI}>
+        <XAxis dataKey="month" fontSize={10} />
+        <Bar dataKey="kpi" fill="#6366f1" radius={[4, 4, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const ScheduleCard = () => (
+  <CardWrapper>
+    <SectionTitle>Schedule</SectionTitle>
+    <ul className="space-y-2 text-sm">
+      {schedule.map((s, i) => (
+        <li key={i} className="flex justify-between">
+          <span>{s.title}</span>
+          <span className="text-slate-500">{s.time}</span>
+        </li>
+      ))}
+    </ul>
+  </CardWrapper>
+);
+
+const DashboardTab = () => (
+  <>
+    <SectionTitle>Snapshot KPIs</SectionTitle>
+    <KPIGrid />
+
+    <div className="grid grid-cols-12 gap-6 mt-6">
+      <div className="col-span-12 lg:col-span-4">
+        <WorkingFormat />
       </div>
-      <div class="cards">
-        <div class="card"><h3><i class="fa-solid fa-chart-simple"></i> Stage Funnel</h3><canvas id="funnelBar"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-chart-line"></i> Applicants Trend</h3><canvas id="appsLine"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-clock"></i> TtF Heatmap</h3><canvas id="ttfHeat"></canvas></div>
+      <div className="col-span-12 lg:col-span-4">
+        <AvgKPICard />
       </div>
-    </section>
-    <!-- Onboarding -->
-    <section id="secOnboard">
-      <h2><i class="fa-solid fa-user-graduate"></i> Onboarding</h2>
-      <div class="cards kpi-group">
-        <div class="card"><h3><i class="fa-solid fa-user-plus"></i> New Hires (30d) <span class="delta">▲2%</span></h3><div class="kpi">80</div></div>
-        <div class="card"><h3><i class="fa-solid fa-clipboard-list"></i> Completion Rate <span class="delta">▲1%</span></h3><div class="kpi">92%</div></div>
-        <div class="card"><h3><i class="fa-solid fa-stopwatch"></i> Avg Time to Prod <span class="delta" style="color:var(--red)">▼4d</span></h3><div class="kpi">18d</div></div>
+      <div className="col-span-12 lg:col-span-4">
+        <ScheduleCard />
       </div>
-      <div class="cards">
-        <div class="card"><h3><i class="fa-solid fa-list-check"></i> Checklist Progress</h3><canvas id="checklistBar"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-thumbs-up"></i> Buddy Feedback</h3><canvas id="feedbackBar"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-shield-dog"></i> Badge Trend</h3><canvas id="badgeLine"></canvas></div>
+    </div>
+  </>
+);
+/*********************************************************
+ * 4) 🛠️  Recruitment widgets
+ *********************************************************/
+const RecruitmentFunnel = () => (
+  <CardWrapper>
+    <SectionTitle>Recruitment Funnel</SectionTitle>
+    <ResponsiveContainer width="100%" height={350}>
+      <FunnelChart>
+        <Tooltip />
+        <Funnel dataKey="value" data={funnelData}>
+          {funnelData.map((d, i) => (
+            <Cell key={d.stage} fill={SOURCE_COLORS[i]} />
+          ))}
+          <LabelList dataKey="stage" position="insideStart" dy={-12} fill="#fff" />
+          <LabelList dataKey="value" position="insideEnd"  dy={ 12} fill="#fff" />
+        </Funnel>
+      </FunnelChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const HiringTrend = () => (
+  <CardWrapper>
+    <SectionTitle>Monthly Hiring Trend</SectionTitle>
+    <ResponsiveContainer width="100%" height={200}>
+      <LineChart data={hiringTrend}>
+        <XAxis dataKey="month" fontSize={10} />
+        <Line dataKey="hires" stroke="#4F46E5" strokeWidth={2} dot />
+        <Tooltip />
+      </LineChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const SourceSplit = () => (
+  <CardWrapper>
+    <SectionTitle>Source Split</SectionTitle>
+    <Donut data={sourceSplit} colors={SOURCE_COLORS} />
+  </CardWrapper>
+);
+
+const RecruitmentTab = () => (
+  <>
+    <SectionTitle>Recruitment</SectionTitle>
+    <div className="grid grid-cols-12 gap-6">
+      <div className="col-span-12 lg:col-span-6"><RecruitmentFunnel /></div>
+      <div className="col-span-12 lg:col-span-6 space-y-6">
+        <HiringTrend />
+        <SourceSplit />
       </div>
-    </section>
-    <!-- DEI -->
-    <section id="secDEI">
-      <h2><i class="fa-solid fa-handshake-angle"></i> DEI</h2>
-      <div class="cards kpi-group">
-        <div class="card"><h3><i class="fa-solid fa-venus-mars"></i> % Female Leaders <span class="delta">▲0.5%</span></h3><div class="kpi">31.6%</div></div>
-        <div class="card"><h3><i class="fa-solid fa-wheelchair"></i> % Disabled <span class="delta">▲0.1%</span></h3><div class="kpi">2.3%</div></div>
-        <div class="card"><h3><i class="fa-solid fa-globe"></i> % Foreign Nationals <span class="delta">▲0.4%</span></h3><div class="kpi">12.5%</div></div>
+    </div>
+  </>
+);
+/*********************************************************
+ * 5) 👥  Workforce widgets
+ *********************************************************/
+const GenderPie = () => (
+  <CardWrapper>
+    <SectionTitle>Gender Structure</SectionTitle>
+    <Donut data={genderStructure} colors={GENDER_COLORS} />
+  </CardWrapper>
+);
+
+const GenerationPie = () => (
+  <CardWrapper>
+    <SectionTitle>Generation Split</SectionTitle>
+    <Donut data={generationData} colors={GENERATION_COLORS} />
+  </CardWrapper>
+);
+
+const AgeHist = () => (
+  <CardWrapper>
+    <SectionTitle>Age Distribution</SectionTitle>
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={ageDistribution} layout="vertical" margin={{ left: 48 }}>
+        <YAxis dataKey="range" type="category" width={60} fontSize={10} />
+        <XAxis type="number" hide />
+        <Bar dataKey="count" fill="#8B5CF6" />
+      </BarChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const WorkforceTab = () => (
+  <>
+    <SectionTitle>Workforce</SectionTitle>
+    <div className="grid grid-cols-12 gap-6">
+      <div className="col-span-12 lg:col-span-4"><GenderPie /></div>
+      <div className="col-span-12 lg:col-span-4"><GenerationPie /></div>
+      <div className="col-span-12 lg:col-span-4"><AgeHist /></div>
+    </div>
+  </>
+);
+
+/*********************************************************
+ * 6) 🚀  Productivity widgets
+ *********************************************************/
+const KPIGridSmall = () => (
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    {prodKPI.map(k => (
+      <CardWrapper key={k.label} className="border">
+        <div className="text-xs text-slate-500">{k.label}</div>
+        <div className="text-xl font-bold text-indigo-700">
+          {k.val}{k.unit}
+        </div>
+      </CardWrapper>
+    ))}
+  </div>
+);
+
+const UPHLineChart = () => (
+  <CardWrapper>
+    <SectionTitle>Pick vs Pack UPH (last 4 hrs)</SectionTitle>
+    <ResponsiveContainer width="100%" height={200}>
+      <LineChart data={uphData}>
+        <XAxis dataKey="hour" fontSize={10} />
+        <Line dataKey="pick" stroke="#4F46E5" dot name="Pick" />
+        <Line dataKey="pack" stroke="#A78BFA" dot name="Pack" />
+        <Tooltip />
+        <Legend verticalAlign="middle" align="right" layout="vertical" />
+      </LineChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const ErrorAreaChart = () => (
+  <CardWrapper>
+    <SectionTitle>Error Rate %</SectionTitle>
+    <ResponsiveContainer width="100%" height={180}>
+      <AreaChart data={errTrend}>
+        <XAxis dataKey="hour" fontSize={10} />
+        <Area dataKey="err" stroke="#EF4444" fill="#FECACA" name="Err %" />
+        <Tooltip formatter={(v) => `${v.toFixed(1)}%`} />
+      </AreaChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const RevenueStack = () => (
+  <CardWrapper>
+    <SectionTitle>Revenue per Staff (k$)</SectionTitle>
+    <ResponsiveContainer width="100%" height={220}>
+      <BarChart data={revStaff}>
+        <XAxis dataKey="q" fontSize={10} />
+        {["jr","mid","sr"].map((k,i)=>(
+          <Bar key={k} dataKey={k} stackId="rev"
+               fill={["#c4b5fd","#a78bfa","#6366f1"][i]}
+               name={["Junior","Mid","Senior"][i]}>
+            {k==="sr" && <LabelList dataKey="sr" position="top" />}
+          </Bar>
+        ))}
+        <Legend layout="vertical" align="right" verticalAlign="middle"/>
+      </BarChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const ProductivityTab = () => (
+  <>
+    <SectionTitle>Productivity</SectionTitle>
+    <KPIGridSmall />
+    <div className="grid grid-cols-12 gap-6 mt-6">
+      <div className="col-span-12 lg:col-span-6"><UPHLineChart /></div>
+      <div className="col-span-12 lg:col-span-6 space-y-6">
+        <ErrorAreaChart />
+        <RevenueStack />
       </div>
-      <div class="cards">
-        <div class="card"><h3><i class="fa-solid fa-people-line"></i> Gender × Level</h3><canvas id="genderLevel"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-chart-pie"></i> Age Pyramid</h3><canvas id="agePyramid"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-dollar-sign"></i> Pay Gap Scatter</h3><canvas id="payScatter"></canvas></div>
+    </div>
+  </>
+);
+/*********************************************************
+ * 7) 🕒  Attendance widgets
+ *********************************************************/
+const AbsenceArea = () => (
+  <CardWrapper>
+    <SectionTitle>Absence Trend %</SectionTitle>
+    <ResponsiveContainer width="100%" height={200}>
+      <AreaChart data={absenceTrend}>
+        <XAxis dataKey="month" fontSize={10} />
+        <Area dataKey="pct" stroke="#EF4444" fill="#fecaca" />
+        <Tooltip formatter={(v)=>`${v}%`} />
+      </AreaChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const OTBar = () => (
+  <CardWrapper>
+    <SectionTitle>Monthly OT hours</SectionTitle>
+    <ResponsiveContainer width="100%" height={160}>
+      <BarChart data={otTrend}>
+        <XAxis dataKey="month" fontSize={10} />
+        <Bar dataKey="ot" fill="#f59e0b">
+          <LabelList dataKey="ot" position="top" />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const AttendanceTab = () => (
+  <>
+    <SectionTitle>Attendance</SectionTitle>
+    <div className="grid grid-cols-12 gap-6">
+      <div className="col-span-12 lg:col-span-6"><AbsenceArea/></div>
+      <div className="col-span-12 lg:col-span-6"><OTBar/></div>
+    </div>
+  </>
+);
+
+/*********************************************************
+ * 8) 🌈  Diversity widgets
+ *********************************************************/
+const LeadershipDonut = () => (
+  <CardWrapper>
+    <SectionTitle>Leadership Diversity</SectionTitle>
+    <Donut data={leadership} colors={["#c4b5fd","#6366f1"]}/>
+  </CardWrapper>
+);
+
+const PromotionStack = () => (
+  <CardWrapper>
+    <SectionTitle>Promotion Rate %</SectionTitle>
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={promoRate}>
+        <XAxis dataKey="gen" fontSize={10}/>
+        <Bar dataKey="male"   stackId="p" fill="#6366f1" name="Male"/>
+        <Bar dataKey="female" stackId="p" fill="#c4b5fd" name="Female"/>
+        <Legend/>
+        <Tooltip formatter={(v)=>`${v}%`}/>
+      </BarChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const PayGapBar = () => (
+  <CardWrapper>
+    <SectionTitle>Pay Gap (k$)</SectionTitle>
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={payGap}>
+        <XAxis dataKey="level" fontSize={10}/>
+        <Bar dataKey="male"   fill="#6366f1" name="Male"/>
+        <Bar dataKey="female" fill="#c4b5fd" name="Female"/>
+        <Legend/>
+        <Tooltip formatter={(v)=>`$${v}k`}/>
+      </BarChart>
+    </ResponsiveContainer>
+  </CardWrapper>
+);
+
+const DiversityTab = () => (
+  <>
+    <SectionTitle>Diversity</SectionTitle>
+    <div className="grid grid-cols-12 gap-6">
+      <div className="col-span-12 lg:col-span-6 space-y-6">
+        <LeadershipDonut/>
+        <PromotionStack/>
       </div>
-    </section>
-    <!-- Leave & Availability -->
-    <section id="secLeave">
-      <h2><i class="fa-solid fa-calendar-minus"></i> Leave & Availability</h2>
-      <div class="cards kpi-group">
-        <div class="card"><h3><i class="fa-solid fa-user-clock"></i> Absence Rate % <span class="delta">▲0.5%</span></h3><div class="kpi">6.5%</div></div>
-        <div class="card"><h3><i class="fa-solid fa-hourglass-half"></i> Avg Remaining Leave <span class="delta" style="color:var(--red)">▼1d</span></h3><div class="kpi">12d</div></div>
-        <div class="card"><h3><i class="fa-solid fa-calendar-check"></i> Annual Leave Taken <span class="delta">▲4%</span></h3><div class="kpi">3,200d</div></div>
+      <div className="col-span-12 lg:col-span-6"><PayGapBar/></div>
+    </div>
+  </>
+);
+
+/*********************************************************
+ * 9) 🗂️  Navigation & root scaffold
+ *********************************************************/
+const NAV = [
+  { key:"dashboard",    icon:<Home size={18}/> },
+  { key:"recruitment",  icon:<Activity size={18}/> },
+  { key:"workforce",    icon:<Users size={18}/> },
+  { key:"productivity", icon:<Briefcase size={18}/> },
+  { key:"attendance",   icon:<Calendar size={18}/> },
+  { key:"diversity",    icon:<CheckCircle size={18}/> },
+];
+
+const Sidebar = ({ tab, setTab }) => (
+  <aside className="hidden lg:flex flex-col gap-6 px-4 py-6 bg-white/80 border-r w-16">
+    {NAV.map(({key,icon})=>(
+      <button key={key}
+              onClick={()=>setTab(key)}
+              className={tab===key ? "text-indigo-600" : "text-slate-500"}>
+        {icon}
+      </button>
+    ))}
+  </aside>
+);
+
+export default function HRDashboard() {
+  const [tab,setTab] = useState<keyof typeof NAV[number]["key"]>("dashboard");
+
+  return (
+    <div className="h-screen flex bg-indigo-50/40">
+      <Sidebar tab={tab} setTab={setTab}/>
+
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="flex items-center justify-between px-6 py-3 border-b bg-white/80 backdrop-blur">
+          <h1 className="text-xl font-semibold">Fulfillment HR Dashboard</h1>
+          <Bell size={18} className="text-slate-500"/>
+        </header>
+
+        {/* Main content */}
+        <main className="flex-1 overflow-y-auto p-6 space-y-10">
+          {tab==="dashboard"   && <DashboardTab/>}
+          {tab==="recruitment" && <RecruitmentTab/>}
+          {tab==="workforce"   && <WorkforceTab/>}
+          {tab==="productivity"&& <ProductivityTab/>}
+          {tab==="attendance"  && <AttendanceTab/>}
+          {tab==="diversity"   && <DiversityTab/>}
+        </main>
       </div>
-      <div class="cards">
-        <div class="card"><h3><i class="fa-solid fa-chart-bar"></i> Leave Type Share</h3><canvas id="leaveType"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-chart-line"></i> Absence Trend</h3><canvas id="absTrend"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-users"></i> Team Availability</h3><canvas id="teamAvail"></canvas></div>
-      </div>
-    </section>
-    <!-- Attrition -->
-    <section id="secAttr">
-      <h2><i class="fa-solid fa-sign-out-alt"></i> Attrition</h2>
-      <div class="cards kpi-group">
-        <div class="card"><h3><i class="fa-solid fa-percentage"></i> Monthly Turnover % <span class="delta">▲0.2%</span></h3><div class="kpi">7.1%</div></div>
-        <div class="card"><h3><i class="fa-solid fa-arrow-right-arrow-left"></i> Voluntary vs Involuntary</h3><div class="kpi">2,541 / 723</div></div>
-        <div class="card"><h3><i class="fa-solid fa-user-shield"></i> High-Risk HC</h3><div class="kpi">30</div></div>
-      </div>
-      <div class="cards">
-        <div class="card"><h3><i class="fa-solid fa-chart-area"></i> Attrition Trend</h3><canvas id="attrTrend"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-water"></i> Exit Reason Waterfall</h3><canvas id="exitReason"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-biohazard"></i> Attrition Risk Map</h3><canvas id="riskMap"></canvas></div>
-      </div>
-    </section>
-    <!-- Historical Trends -->
-    <section id="secTrends">
-      <h2><i class="fa-solid fa-chart-simple"></i> Historical & Trends</h2>
-      <div class="cards">
-        <div class="card"><h3><i class="fa-solid fa-gauge-high"></i> HC Movement</h3><canvas id="hcWaterfall"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-chart-line"></i> HC by Year</h3><canvas id="hcYear"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-chart-line"></i> Terms by Month</h3><canvas id="termsMonth"></canvas></div>
-      </div>
-    </section>
-    <!-- Termination Profile -->
-    <section id="secTerm">
-      <h2><i class="fa-solid fa-scale-balanced"></i> Termination Profile</h2>
-      <div class="cards kpi-group">
-        <div class="card"><h3><i class="fa-solid fa-user-slash"></i> Total Terminations</h3><div class="kpi">3,265</div></div>
-        <div class="card"><h3><i class="fa-solid fa-user-minus"></i> Voluntary</h3><div class="kpi">2,541</div></div>
-        <div class="card"><h3><i class="fa-solid fa-user-xmark"></i> Involuntary</h3><div class="kpi">723</div></div>
-        <div class="card"><h3><i class="fa-solid fa-user-clock"></i> 1st-Year</h3><div class="kpi">123</div></div>
-      </div>
-      <div class="cards">
-        <div class="card"><h3><i class="fa-solid fa-chart-bar"></i> Terminations by Reason</h3><canvas id="termReason"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-venus-mars"></i> Terminations by Gender</h3><canvas id="termGender"></canvas></div>
-        <div class="card"><h3><i class="fa-solid fa-code-branch"></i> Termination Flow</h3><canvas id="termFlow"></canvas></div>
-      </div>
-    </section>
-  </main>
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const css = getComputedStyle(document.documentElement);
-      const C = {
-        p: css.getPropertyValue('--primary').trim(),
-        t: css.getPropertyValue('--teal').trim(),
-        r: css.getPropertyValue('--red').trim()
-      };
-      // Dummy data
-      const D = {
-        months: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
-        funnel: [1200,800,450,150,95],
-        apps: [800,900,850,950,1100,1200,1150,1250,1300,1400,1350,1450],
-        ttf: [30,28,35],
-        checklist: [92,8], feedback: [60,25,15], badge: [18,17,16,15,14,14,13,12,11,10,9,8],
-        genLevel: [300,200,100,80], agePyramid: [40,60,50,20], payGap: [{x:30,y:50000},{x:45,y:55000},{x:25,y:48000}],
-        leaveType: [300,200,150], absTrend: [5,6,7,6,5,8,7,6,5,7,8,6], teamAvail: [10,8,12,11],
-        attrTrend: [2,3,2.5,2.7,2.4,2.6,2.8,2.5,2.3,2.1,2.2,2.0],
-        exitReason: [936,616,401,319,263,129,81,77], termReasonLabels: ['Personal','Pay','Contract','Career','Role','Redundancy','Workload','Mgmt'],
-        riskMap: [{x:1,y:0.7,r:15},{x:3,y:0.5,r:10},{x:5,y:0.9,r:20}],
-        hcYear: ['2021','2022','2023','2024'], hcVal: [5000,5800,6100,6400], termsMonth: [12,11,13,12,11,14,15,13,12,14,13,11],
-        termGender: [1200,2065], termReasonFlow: [ {from: 'Prod','category': 'Voluntary', value: 360}, {from: 'IT','category':'Involuntary',value:170} ]
-      };
-      // Helper
-      const makeBar = (id, labels, data, bg, horiz=false) => {
-        const ctx = document.getElementById(id);
-        if (!ctx) return;
-        new Chart(ctx, { type:'bar', data:{ labels, datasets:[{ data, backgroundColor: bg }] }, options:{ indexAxis: horiz?'y':'x', plugins:{legend:{display:false}}, scales:{x:{beginAtZero:true},y:{beginAtZero:true}} } });
-      };
-      const makeLine = (id, labels, data, color) => {
-        const ctx = document.getElementById(id);
-        if (!ctx) return;
-        new Chart(ctx,{ type:'line', data:{ labels, datasets:[{ data, borderColor: color, fill:false, tension:0.3 }] }, options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} } });
-      };
-      const makeScatter = (id, data, color) => {
-        const ctx = document.getElementById(id);
-        if(!ctx) return;
-        new Chart(ctx,{ type:'bubble', data:{ datasets:[{ data, backgroundColor: color }] }, options:{ plugins:{legend:{display:false}}, scales:{x:{title:{display:true,text:'Tenure'}}, y:{title:{display:true,text:'Salary'}}} } });
-      };
-      // Charts
-      makeBar('funnelBar',['Applied','Screen','Interview','Offer','Hire'],D.funnel,[C.p,C.t,C.p,C.t,C.p],true);
-      makeLine('appsLine',D.months,D.apps,C.p);
-      makeBar('ttfHeat',['Sick','Annual','Other'],D.ttf,[C.p,C.t,C.r]);
-      makeBar('checklistBar',['Done','Pending'],D.checklist,[C.p,C.r]);
-      makeBar('feedbackBar',['Positive','Neutral','Negative'],D.feedback,[C.t,'#999',C.r]);
-      makeLine('badgeLine',D.months,D.badge,C.t);
-      makeBar('genderLevel',['Entry','Staff','Mgr','Exec'],D.genLevel,[C.p,C.p,C.p,C.p],true);
-      makeBar('agePyramid',['20s','30s','40s','50s'],D.agePyramid,[C.t,C.t,C.t,C.t],true);
-      makeScatter('payScatter', D.payGap, C.r);
-      makeBar('leaveType',['Sick','Annual','Other'],D.leaveType,[C.p,C.t,C.r]);
-      makeLine('absTrend',D.months,D.absTrend,C.p);
-      makeBar('teamAvail',['Team A','Team B','Team C','Team D'],D.teamAvail,[C.t,C.t,C.t,C.t]);
-      makeLine('attrTrend',D.months,D.attrTrend,C.r);
-      new Chart(document.getElementById('exitReason'),{ type:'bar', data:{ labels:D.termReasonLabels, datasets:[{ data:D.exitReason, backgroundColor:C.r }] }, options:{ plugins:{legend:{display:false}}, scales:{y:{beginAtZero:true}} } });
-      makeScatter('riskMap',D.riskMap,C.p);
-      new Chart(document.getElementById('hcWaterfall'),{ data:{ labels:['Start','Hires','Terms','Net'], datasets:[{ type:'bar', label:'Δ', data:D.delta=[0,500,-300,200], backgroundColor:[C.t,C.t,C.r,C.t] },{ type:'line', label:'HC', data:D.hcStep, borderColor:'#333', borderWidth:2, fill:false }] }, options:{ plugins:{legend:{position:'bottom'}}, scales:{y:{beginAtZero:true}} } });
-      makeLine('hcYear',D.hcYear,D.hcVal,C.p);
-      makeLine('termsMonth',D.months,D.termsMonth,C.p);
-      makeBar('termReason',D.termReasonLabels,D.exitReason,[C.r],false);
-      makeBar('termGender',['Male','Female'],D.termGender,[C.p,C.t],true);
-      // Termination flow (simple bar mimic):
-      makeBar('termFlow',['Prod→Vol','IT→Invol'],[D.termReasonFlow[0].value,D.termReasonFlow[1].value],[C.p,C.r]);
-    });
-  </script>
-</body>
-</html>
+    </div>
+  );
+}
